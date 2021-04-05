@@ -1,18 +1,21 @@
+import { Swiper } from '@callaars/react-native-infinite-swiper';
 import * as React from 'react';
-
-import { StyleSheet, View, Text } from 'react-native';
-import ReactNativeInfiniteSwiper from '@callaars/react-native-infinite-swiper';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import type { Value } from 'react-native-reanimated';
+import Test from './Test';
 
 export default function App() {
-  const [result, setResult] = React.useState<number | undefined>();
+  const { width, height } = useWindowDimensions();
 
-  React.useEffect(() => {
-    ReactNativeInfiniteSwiper.multiply(3, 7).then(setResult);
-  }, []);
+  const listWidth = width;
+
+  const renderItem = (index: Value<number>, isFocused: Value<0 | 1>) => (
+    <Test {...{ index, isFocused }} />
+  );
 
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Swiper {...{ width: listWidth, height, renderItem }} />
     </View>
   );
 }
@@ -22,10 +25,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  box: {
-    width: 60,
-    height: 60,
-    marginVertical: 20,
   },
 });
