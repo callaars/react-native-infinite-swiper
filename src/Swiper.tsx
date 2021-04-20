@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import Animated, {
@@ -214,7 +214,6 @@ export const Swiper = React.memo((props: SwiperProps) => {
   );
 
   const index = useValue<number>(0);
-  const readableIndex = useRef<number>(0);
 
   const snapPoints = useMemoOne(
     () => [new Value(-width), new Value(0), new Value(width)],
@@ -239,10 +238,8 @@ export const Swiper = React.memo((props: SwiperProps) => {
   );
 
   const scrollToIndex = (newIndex: number) => {
-    if (newIndex !== readableIndex.current) {
-      forceToIndex.setValue(newIndex);
-      overrideSpring.setValue(1);
-    }
+    forceToIndex.setValue(newIndex);
+    overrideSpring.setValue(1);
   };
 
   return (
