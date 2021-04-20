@@ -1,27 +1,120 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import Animated, {
-  abs,
   add,
+  and,
   block,
+  Clock,
+  clockRunning,
   cond,
   eq,
   greaterThan,
-  multiply,
+  lessThan,
+  neq,
+  not,
   set,
+  spring,
+  startClock,
+  stopClock,
   sub,
   useCode,
   useValue,
   Value,
 } from 'react-native-reanimated';
-import { usePanGestureHandler } from 'react-native-redash';
+import { snapPoint, usePanGestureHandler } from 'react-native-redash';
+import { useMemoOne } from 'use-memo-one';
 import Card from './Card';
 
-type SwiperProps = {
-  width: number;
-  height: number;
-  renderItem: (index: Value<number>, isFocused: Value<0 | 1>) => JSX.Element;
+interface PrivateSpringConfig extends Animated.SpringConfig {
+  toValue: Animated.Value<number>;
+}
+
+type WithSpringProps = {
+  value: Value<number>;
+  xPosition: Value<number>;
+  index: Value<number>;
+  offsets: Value<number>[];
+  velocity: Value<number>;
+  state: Value<State>;
+  snapPoints: Animated.Adaptable<number>[];
+};
+
+const withSpring = ({
+  value,
+  xPosition,
+  index,
+  offsets,
+  state,
+  snapPoints,
+  velocity,
+}: WithSpringProps) => {
+  //#region Boilerplate
+  const clock = new Clock();
+  const gestureAndAnimationIsOver = new Value(1);
+
+  const config: PrivateSpringConfig = {
+    toValue: new Value(0),
+    damping: 40,
+    mass: 1,
+    stiffness: 300,
+    overshootClamping: false,
+    restSpeedThreshold: 1,
+    restDisplacementThreshold: 1,
+  };
+
+  const springState: Animated.SpringState = {
+    position: new Value(0),
+    time: new Value(0),
+    finished: new Value(0),
+    velocity: new Value(0),
+  };
+  //#endregion
+
+  const isSpringInterrupted = and(eq(state, State.BEGAN), clockRunning(clock));
+
+  const finishSpring = [
+    stopClock(clock),
+    cond(greaterThan(springState.position, 0), [
+      set(index, sub(index, 1)),
+      set(offsets[0], subtractOffset(offsets[0])),
+      set(offsets[1], subtractOffset(offsets[1])),
+      set(offsets[2], subtractOffset(offsets[2])),
+    ]),
+    cond(lessThan(springState.position, 0), [
+      set(index, add(index, 1)),
+      set(offsets[0], addOffset(offsets[0])),
+      set(offsets[1], addOffset(offsets[1])),
+      set(offsets[2], addOffset(offsets[2])),
+    ]),
+    set(springState.position, 0),
+    set(xPosition, 0),
+  ];
+
+  return block([
+    cond(isSpringInterrupted, finishSpring),
+    cond(gestureAndAnimationIsOver, set(springState.position, 0)),
+    cond(neq(state, State.END), [
+      set(gestureAndAnimationIsOver, 0),
+      set(springState.finished, 0),
+      set(springState.position, value),
+      set(xPosition, springState.position),
+    ]),
+    cond(and(eq(state, State.END), not(gestureAndAnimationIsOver)), [
+      cond(and(not(clockRunning(clock)), not(springState.finished)), [
+        set(springState.velocity, velocity),
+        set(springState.time, 0),
+        set(
+          config.toValue,
+          snapPoint(springState.position, velocity, snapPoints)
+        ),
+        startClock(clock),
+      ]),
+      spring(clock, springState, config),
+      cond(springState.finished, finishSpring),
+    ]),
+    set(xPosition, springState.position),
+  ]);
 };
 
 const subtractOffset = (offset: Value<number>) =>
@@ -30,18 +123,26 @@ const subtractOffset = (offset: Value<number>) =>
 const addOffset = (offset: Value<number>) =>
   block([cond(eq(offset, 2), 0, add(offset, 1))]);
 
+type SwiperProps = {
+  width: number;
+  height: number;
+  renderItem: (index: Value<number>, isFocused: Value<0 | 1>) => JSX.Element;
+};
+
 export const Swiper = React.memo((props: SwiperProps) => {
+  //#region Boilerplate
   const { height, width, renderItem } = props;
 
-  //#region Boilerplate
-  const translateX = useValue<number>(0);
-  const startX = useValue<number>(0);
-  const paneWidth = useValue<number>(width);
-  const snapWidth = useValue<number>(width / 2);
+  const definitiveTranslation = useValue<number>(0);
 
-  const { state, gestureHandler, translation } = usePanGestureHandler();
+  const {
+    state,
+    gestureHandler,
+    translation,
+    velocity,
+  } = usePanGestureHandler();
 
-  const offsets = useMemo(
+  const offsets = useMemoOne(
     () => [
       new Value<0 | 1 | 2>(0),
       new Value<0 | 1 | 2>(1),
@@ -51,56 +152,24 @@ export const Swiper = React.memo((props: SwiperProps) => {
   );
 
   const index = useValue<number>(0);
+
+  const snapPoints = useMemoOne(
+    () => [new Value(-width), new Value(0), new Value(width)],
+    []
+  );
   //#endregion
 
   useCode(
-    () => [
-      cond(eq(state, State.BEGAN), [set(startX, translateX)]),
-      cond(eq(state, State.ACTIVE), [
-        set(translateX, add(startX, translation.x)),
-      ]),
-      cond(eq(state, State.END), [
-        cond(
-          greaterThan(abs(translation.x), snapWidth),
-          [
-            // We need to snap
-            cond(
-              greaterThan(translation.x, 0),
-              [
-                // Move right
-                set(translateX, paneWidth),
-                set(index, sub(index, 1)),
-              ],
-              [
-                // Move left
-                set(translateX, multiply(paneWidth, -1)),
-                set(index, add(index, 1)),
-              ]
-            ),
-          ],
-          // Don't snap just reset the translation
-          set(translateX, startX)
-        ),
-
-        cond(
-          eq(translateX, paneWidth),
-          [
-            // We have moved right
-            set(offsets[0], subtractOffset(offsets[0])),
-            set(offsets[1], subtractOffset(offsets[1])),
-            set(offsets[2], subtractOffset(offsets[2])),
-            set(translateX, 0),
-          ],
-          cond(eq(translateX, multiply(paneWidth, -1)), [
-            // We have moved left
-            set(offsets[0], addOffset(offsets[0])),
-            set(offsets[1], addOffset(offsets[1])),
-            set(offsets[2], addOffset(offsets[2])),
-            set(translateX, 0),
-          ])
-        ),
-      ]),
-    ],
+    () =>
+      withSpring({
+        value: translation.x,
+        velocity: velocity.x,
+        state,
+        snapPoints,
+        offsets,
+        index,
+        xPosition: definitiveTranslation,
+      }),
     []
   );
 
@@ -108,7 +177,11 @@ export const Swiper = React.memo((props: SwiperProps) => {
     <View collapsable={false} style={{ width, height }}>
       <PanGestureHandler {...gestureHandler}>
         <Animated.View
-          style={{ width, height, transform: [{ translateX }] }}
+          style={{
+            width,
+            height,
+            transform: [{ translateX: definitiveTranslation }],
+          }}
           collapsable={false}
         >
           <Card
