@@ -75,13 +75,13 @@ const withSpring = ({
 
   const finishSpring = [
     stopClock(clock),
-    cond(greaterThan(springState.position, 0), [
+    cond(greaterThan(springState.position, 100), [
       set(index, sub(index, 1)),
       set(offsets[0], subtractOffset(offsets[0])),
       set(offsets[1], subtractOffset(offsets[1])),
       set(offsets[2], subtractOffset(offsets[2])),
     ]),
-    cond(lessThan(springState.position, 0), [
+    cond(lessThan(springState.position, -100), [
       set(index, add(index, 1)),
       set(offsets[0], addOffset(offsets[0])),
       set(offsets[1], addOffset(offsets[1])),
