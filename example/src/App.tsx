@@ -9,9 +9,11 @@ export default function App() {
 
   const listWidth = width;
 
-  const renderItem = (index: Value<number>, isFocused: Value<0 | 1>) => (
-    <Test {...{ index, isFocused }} />
-  );
+  const renderItem = (
+    index: Value<number>,
+    isFocused: Value<0 | 1>,
+    scrollToIndex: (index: number) => void
+  ) => <Test {...{ index, isFocused, scrollToIndex }} />;
 
   return (
     <View style={styles.container}>

@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Button, StyleSheet, Text, View } from 'react-native';
 import { call, useCode, Value } from 'react-native-reanimated';
 
-type TestProps = { index: Value<number>; isFocused: Value<0 | 1> };
+type TestProps = {
+  scrollToIndex: (index: number) => void;
+  index: Value<number>;
+  isFocused: Value<0 | 1>;
+};
 
 const Test = (props: TestProps) => {
-  const { index: animatedIndex, isFocused } = props;
+  const { index: animatedIndex, isFocused, scrollToIndex } = props;
 
   const [index, setIndex] = useState<number | null>(null);
   const [hasFocus, setHasFocus] = useState<boolean>(false);
@@ -20,6 +24,9 @@ const Test = (props: TestProps) => {
   );
 
   const [backgroundColor] = useState(randomColor());
+  const randomNumber = Math.round(Math.random() * 1000 - 500);
+
+  const onPress = () => scrollToIndex(randomNumber);
 
   if (index === null) {
     return null;
@@ -29,6 +36,7 @@ const Test = (props: TestProps) => {
     <View style={[styles.view, { backgroundColor }]}>
       <Text style={styles.text}>{index}</Text>
       <Text style={styles.text}>Focused: {hasFocus ? 'Yes!' : 'No'}</Text>
+      <Button {...{ title: `Go to ${randomNumber}`, onPress }} />
     </View>
   );
 };

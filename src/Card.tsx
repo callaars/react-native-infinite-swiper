@@ -11,19 +11,21 @@ import Animated, {
   useValue,
   Value,
 } from 'react-native-reanimated';
+import type { RenderItem } from './Swiper';
 
 type CardProps = {
-  renderItem: (index: Value<number>, isFocused: Value<0 | 1>) => JSX.Element;
+  renderItem: RenderItem;
   offset: Value<0 | 1 | 2>;
   width: number;
   height: number;
   index: Value<number>;
+  scrollToIndex: (index: number) => void;
 };
 
 const Card = (props: CardProps) => {
-  const { offset, renderItem, width, height, index } = props;
-
   //#region Boilerplate
+  const { offset, renderItem, width, height, index, scrollToIndex } = props;
+
   const translateX = useValue<number>(0);
   const realIndex = useValue<number>(0);
   const isFocused = useValue<0 | 1>(0);
@@ -54,7 +56,7 @@ const Card = (props: CardProps) => {
         { transform: [{ translateX }] },
       ]}
     >
-      {renderItem(realIndex, isFocused)}
+      {renderItem(realIndex, isFocused, scrollToIndex)}
     </Animated.View>
   );
 };

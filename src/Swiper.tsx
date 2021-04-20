@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import Animated, {
@@ -26,6 +26,7 @@ import { snapPoint, usePanGestureHandler } from 'react-native-redash';
 import { useMemoOne } from 'use-memo-one';
 import Card from './Card';
 
+//#region withSpring
 interface PrivateSpringConfig extends Animated.SpringConfig {
   toValue: Animated.Value<number>;
 }
@@ -36,8 +37,10 @@ type WithSpringProps = {
   index: Value<number>;
   offsets: Value<number>[];
   velocity: Value<number>;
+  overrideSpring: Value<number>;
   state: Value<State>;
   snapPoints: Animated.Adaptable<number>[];
+  forceToIndex: Value<number>;
 };
 
 const withSpring = ({
@@ -48,6 +51,8 @@ const withSpring = ({
   state,
   snapPoints,
   velocity,
+  forceToIndex,
+  overrideSpring,
 }: WithSpringProps) => {
   //#region Boilerplate
   const clock = new Clock();
@@ -59,6 +64,16 @@ const withSpring = ({
     mass: 1,
     stiffness: 300,
     overshootClamping: false,
+    restSpeedThreshold: 1,
+    restDisplacementThreshold: 1,
+  };
+
+  const configOverride: PrivateSpringConfig = {
+    toValue: new Value(0),
+    damping: 30,
+    mass: 1,
+    stiffness: 300,
+    overshootClamping: true,
     restSpeedThreshold: 1,
     restDisplacementThreshold: 1,
   };
@@ -75,6 +90,7 @@ const withSpring = ({
 
   const finishSpring = [
     stopClock(clock),
+    set(overrideSpring, 0),
     cond(greaterThan(springState.position, 100), [
       set(index, sub(index, 1)),
       set(offsets[0], subtractOffset(offsets[0])),
@@ -94,39 +110,83 @@ const withSpring = ({
   return block([
     cond(isSpringInterrupted, finishSpring),
     cond(gestureAndAnimationIsOver, set(springState.position, 0)),
-    cond(neq(state, State.END), [
+    cond(and(not(overrideSpring), neq(state, State.END)), [
       set(gestureAndAnimationIsOver, 0),
       set(springState.finished, 0),
       set(springState.position, value),
       set(xPosition, springState.position),
     ]),
-    cond(and(eq(state, State.END), not(gestureAndAnimationIsOver)), [
-      cond(and(not(clockRunning(clock)), not(springState.finished)), [
-        set(springState.velocity, velocity),
-        set(springState.time, 0),
-        set(
-          config.toValue,
-          snapPoint(springState.position, velocity, snapPoints)
+    cond(overrideSpring, [
+      cond(not(clockRunning(clock)), [
+        cond(
+          lessThan(forceToIndex, index),
+          [
+            // We are going left
+            set(index, add(forceToIndex, 1)),
+            set(springState.finished, 0),
+            set(springState.velocity, 50),
+            set(springState.time, 0),
+            set(configOverride.toValue, snapPoints[2]),
+            startClock(clock),
+          ],
+          [
+            // We are going right
+            set(index, sub(forceToIndex, 1)),
+            set(springState.finished, 0),
+            set(springState.velocity, -50),
+            set(springState.time, 0),
+            set(gestureAndAnimationIsOver, 0),
+            set(configOverride.toValue, snapPoints[0]),
+            startClock(clock),
+          ]
         ),
-        startClock(clock),
       ]),
-      spring(clock, springState, config),
+      spring(clock, springState, configOverride),
       cond(springState.finished, finishSpring),
     ]),
+    cond(
+      and(
+        eq(state, State.END),
+        not(gestureAndAnimationIsOver),
+        not(overrideSpring)
+      ),
+      [
+        cond(and(not(clockRunning(clock)), not(springState.finished)), [
+          set(springState.velocity, velocity),
+          set(springState.time, 0),
+          set(
+            config.toValue,
+            snapPoint(springState.position, velocity, snapPoints)
+          ),
+          startClock(clock),
+        ]),
+        spring(clock, springState, config),
+        cond(springState.finished, finishSpring),
+      ]
+    ),
     set(xPosition, springState.position),
   ]);
 };
+//#endregion
 
+//#region subtract/addOffset
 const subtractOffset = (offset: Value<number>) =>
   block([cond(eq(offset, 0), 2, sub(offset, 1))]);
 
 const addOffset = (offset: Value<number>) =>
   block([cond(eq(offset, 2), 0, add(offset, 1))]);
+//#endregion
+
+export type RenderItem = (
+  index: Value<number>,
+  isFocused: Value<0 | 1>,
+  scrollToIndex: (index: number) => void
+) => JSX.Element;
 
 type SwiperProps = {
   width: number;
   height: number;
-  renderItem: (index: Value<number>, isFocused: Value<0 | 1>) => JSX.Element;
+  renderItem: RenderItem;
 };
 
 export const Swiper = React.memo((props: SwiperProps) => {
@@ -134,6 +194,8 @@ export const Swiper = React.memo((props: SwiperProps) => {
   const { height, width, renderItem } = props;
 
   const definitiveTranslation = useValue<number>(0);
+  const overrideSpring = useValue<number>(0);
+  const forceToIndex = useValue<number>(0);
 
   const {
     state,
@@ -152,6 +214,7 @@ export const Swiper = React.memo((props: SwiperProps) => {
   );
 
   const index = useValue<number>(0);
+  const readableIndex = useRef<number>(0);
 
   const snapPoints = useMemoOne(
     () => [new Value(-width), new Value(0), new Value(width)],
@@ -166,12 +229,21 @@ export const Swiper = React.memo((props: SwiperProps) => {
         velocity: velocity.x,
         state,
         snapPoints,
+        overrideSpring,
         offsets,
         index,
         xPosition: definitiveTranslation,
+        forceToIndex,
       }),
     []
   );
+
+  const scrollToIndex = (newIndex: number) => {
+    if (newIndex !== readableIndex.current) {
+      forceToIndex.setValue(newIndex);
+      overrideSpring.setValue(1);
+    }
+  };
 
   return (
     <View collapsable={false} style={{ width, height }}>
@@ -186,15 +258,36 @@ export const Swiper = React.memo((props: SwiperProps) => {
         >
           <Card
             key="card-0"
-            {...{ renderItem, offset: offsets[0], width, height, index }}
+            {...{
+              renderItem,
+              offset: offsets[0],
+              width,
+              height,
+              index,
+              scrollToIndex,
+            }}
           />
           <Card
             key="card-1"
-            {...{ renderItem, offset: offsets[1], width, height, index }}
+            {...{
+              renderItem,
+              offset: offsets[1],
+              width,
+              height,
+              index,
+              scrollToIndex,
+            }}
           />
           <Card
             key="card-2"
-            {...{ renderItem, offset: offsets[2], width, height, index }}
+            {...{
+              renderItem,
+              offset: offsets[2],
+              width,
+              height,
+              index,
+              scrollToIndex,
+            }}
           />
         </Animated.View>
       </PanGestureHandler>
