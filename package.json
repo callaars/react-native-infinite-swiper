@@ -1,6 +1,6 @@
 {
   "name": "@callaars/react-native-infinite-swiper",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Crisp 60fps infinite horizontal swiper for React Native.",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
