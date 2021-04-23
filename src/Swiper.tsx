@@ -262,6 +262,7 @@ export const Swiper = React.memo((props: SwiperProps) => {
               height,
               index,
               scrollToIndex,
+              initialFocus: 0,
             }}
           />
           <Card
@@ -273,6 +274,7 @@ export const Swiper = React.memo((props: SwiperProps) => {
               height,
               index,
               scrollToIndex,
+              initialFocus: 1,
             }}
           />
           <Card
@@ -284,6 +286,7 @@ export const Swiper = React.memo((props: SwiperProps) => {
               height,
               index,
               scrollToIndex,
+              initialFocus: 0,
             }}
           />
         </Animated.View>

@@ -20,15 +20,24 @@ type CardProps = {
   height: number;
   index: Value<number>;
   scrollToIndex: (index: number) => void;
+  initialFocus: 0 | 1;
 };
 
 const Card = (props: CardProps) => {
   //#region Boilerplate
-  const { offset, renderItem, width, height, index, scrollToIndex } = props;
+  const {
+    offset,
+    renderItem,
+    width,
+    height,
+    index,
+    scrollToIndex,
+    initialFocus,
+  } = props;
 
   const translateX = useValue<number>(0);
   const realIndex = useValue<number>(0);
-  const isFocused = useValue<0 | 1>(0);
+  const isFocused = useValue<0 | 1>(initialFocus);
   //#endregion
 
   useCode(
